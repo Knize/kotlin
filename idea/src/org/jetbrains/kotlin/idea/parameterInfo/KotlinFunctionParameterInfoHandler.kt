@@ -21,7 +21,6 @@ import com.intellij.codeInsight.lookup.LookupElement
 import com.intellij.lang.parameterInfo.*
 import com.intellij.openapi.project.Project
 import com.intellij.psi.impl.source.tree.LeafPsiElement
-import com.intellij.psi.tree.IElementType
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.ui.Gray
 import com.intellij.ui.JBColor
@@ -44,7 +43,6 @@ import org.jetbrains.kotlin.renderer.DescriptorRenderer
 import org.jetbrains.kotlin.resolve.BindingContext
 import org.jetbrains.kotlin.resolve.DescriptorToSourceUtils
 import org.jetbrains.kotlin.resolve.calls.callUtil.getCall
-import org.jetbrains.kotlin.resolve.calls.callUtil.getParentCall
 import org.jetbrains.kotlin.resolve.calls.callUtil.getResolvedCall
 import org.jetbrains.kotlin.resolve.calls.model.ArgumentMatch
 import org.jetbrains.kotlin.resolve.calls.util.DelegatingCall
@@ -76,7 +74,6 @@ class KotlinFunctionLambdaArgumentInfoHandler : KotlinParameterInfoWithCallHandl
         if (context.parameterOwner !== argumentList) {
             context.removeHint()
         }
-        //val parameterIndex
         val ktCallExpression = argumentList.parent as KtCallExpression
         val bindingContext = ktCallExpression.analyze()
         val call = ktCallExpression.getCall(bindingContext) ?: return
