@@ -21,10 +21,12 @@ import com.intellij.codeInsight.lookup.LookupElement
 import com.intellij.lang.parameterInfo.*
 import com.intellij.openapi.project.Project
 import com.intellij.psi.impl.source.tree.LeafPsiElement
+import com.intellij.psi.tree.IElementType
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.ui.Gray
 import com.intellij.ui.JBColor
 import org.jetbrains.kotlin.builtins.KotlinBuiltIns
+import org.jetbrains.kotlin.builtins.isFunctionType
 import org.jetbrains.kotlin.descriptors.FunctionDescriptor
 import org.jetbrains.kotlin.descriptors.ValueParameterDescriptor
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
@@ -42,6 +44,7 @@ import org.jetbrains.kotlin.renderer.DescriptorRenderer
 import org.jetbrains.kotlin.resolve.BindingContext
 import org.jetbrains.kotlin.resolve.DescriptorToSourceUtils
 import org.jetbrains.kotlin.resolve.calls.callUtil.getCall
+import org.jetbrains.kotlin.resolve.calls.callUtil.getParentCall
 import org.jetbrains.kotlin.resolve.calls.callUtil.getResolvedCall
 import org.jetbrains.kotlin.resolve.calls.model.ArgumentMatch
 import org.jetbrains.kotlin.resolve.calls.util.DelegatingCall
@@ -60,6 +63,32 @@ class KotlinFunctionParameterInfoHandler : KotlinParameterInfoWithCallHandlerBas
     override fun getActualParametersRBraceType() = KtTokens.RPAR
 
     override fun getArgumentListAllowedParentClasses() = setOf(KtCallElement::class.java)
+}
+
+class KotlinFunctionLambdaArgumentInfoHandler : KotlinParameterInfoWithCallHandlerBase<KtLambdaArgument, KtLambdaArgument>(KtLambdaArgument::class, KtLambdaArgument::class) {
+    override fun getArgumentListAllowedParentClasses() = setOf(KtCallElement::class.java)
+
+    override fun getActualParametersRBraceType() = KtTokens.RBRACE
+
+    override fun getActualParameters(o: KtLambdaArgument): Array<KtLambdaArgument> = arrayOf(o)
+
+    override fun updateParameterInfo(argumentList: KtLambdaArgument, context: UpdateParameterInfoContext) {
+        if (context.parameterOwner !== argumentList) {
+            context.removeHint()
+        }
+        //val parameterIndex
+        val ktCallExpression = argumentList.parent as KtCallExpression
+        val bindingContext = ktCallExpression.analyze()
+        val call = ktCallExpression.getCall(bindingContext) ?: return
+        val resolvedCall = call.getResolvedCall(bindingContext) ?: return
+        val lastParameter = resolvedCall.candidateDescriptor.valueParameters.last()
+        if(!lastParameter.type.isFunctionType) {
+            context.removeHint()
+            return
+        }
+        val index = call.valueArguments.lastIndex
+        context.setCurrentParameter(index)
+    }
 }
 
 class KotlinArrayAccessParameterInfoHandler : KotlinParameterInfoWithCallHandlerBase<KtContainerNode, KtExpression>(KtContainerNode::class, KtExpression::class) {
@@ -232,6 +261,7 @@ abstract class KotlinParameterInfoWithCallHandlerBase<TArgumentList : KtElement,
 
     //TODO
     override fun couldShowInLookup() = false
+
     override fun getParametersForLookup(item: LookupElement, context: ParameterInfoContext) = emptyArray<Any>()
     override fun getParametersForDocumentation(item: FunctionDescriptor, context: ParameterInfoContext) = emptyArray<Any>()
 
