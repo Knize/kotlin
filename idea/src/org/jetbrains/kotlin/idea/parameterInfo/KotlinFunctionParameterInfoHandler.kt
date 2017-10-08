@@ -20,6 +20,7 @@ import com.intellij.codeInsight.CodeInsightBundle
 import com.intellij.codeInsight.lookup.LookupElement
 import com.intellij.lang.parameterInfo.*
 import com.intellij.openapi.project.Project
+import com.intellij.psi.PsiWhiteSpace
 import com.intellij.psi.impl.source.tree.LeafPsiElement
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.ui.Gray
@@ -51,26 +52,52 @@ import org.jetbrains.kotlin.resolve.lazy.BodyResolveMode
 import org.jetbrains.kotlin.types.KotlinType
 import org.jetbrains.kotlin.types.isError
 import org.jetbrains.kotlin.types.typeUtil.containsError
+import org.jetbrains.kotlin.utils.addToStdlib.cast
 import java.awt.Color
 import java.util.*
 import kotlin.reflect.KClass
 
 class KotlinFunctionParameterInfoHandler : KotlinParameterInfoWithCallHandlerBase<KtValueArgumentList, KtValueArgument>(KtValueArgumentList::class, KtValueArgument::class) {
-    override fun getActualParameters(arguments: KtValueArgumentList) = arguments.arguments.toTypedArray()
+    override fun getActualParameters(arguments: KtValueArgumentList): Array<KtValueArgument> {
+        var result = arguments.arguments.toTypedArray()
+        val children = arguments.parent.children
+        val index = children.indexOfFirst { it is KtValueArgument }
+        if (index != -1) {
+            val valueArgument = children[index] as KtValueArgument
+            result = result.plus(arrayOf(valueArgument))
+        }
+        return result
+    }
 
     override fun getActualParametersRBraceType() = KtTokens.RPAR
 
     override fun getArgumentListAllowedParentClasses() = setOf(KtCallElement::class.java)
+
+    override fun updateParameterInfo(argumentList: KtValueArgumentList, context: UpdateParameterInfoContext) {
+        if (context.parameterOwner !== argumentList) {
+            context.removeHint()
+        }
+        super.updateParameterInfo(argumentList, context)
+    }
 }
 
-class KotlinFunctionLambdaArgumentInfoHandler : KotlinParameterInfoWithCallHandlerBase<KtLambdaArgument, KtLambdaArgument>(KtLambdaArgument::class, KtLambdaArgument::class) {
+class KotlinFunctionLambdaArgumentInfoHandler : KotlinParameterInfoWithCallHandlerBase<KtValueArgument, KtValueArgument>(KtValueArgument::class, KtValueArgument::class) {
     override fun getArgumentListAllowedParentClasses() = setOf(KtCallElement::class.java)
 
     override fun getActualParametersRBraceType() = KtTokens.RBRACE
 
-    override fun getActualParameters(o: KtLambdaArgument): Array<KtLambdaArgument> = arrayOf(o)
+    override fun getActualParameters(o: KtValueArgument): Array<KtValueArgument> {
+        var result = arrayOf(o)
+        val children = o.parent.children
+        val index = children.indexOfFirst { it is KtValueArgumentList }
+        if (index != -1) {
+            val valueArgumentList = children[index] as KtValueArgumentList
+            result = result.plus(valueArgumentList.arguments.toTypedArray())
+        }
+        return result
+    }
 
-    override fun updateParameterInfo(argumentList: KtLambdaArgument, context: UpdateParameterInfoContext) {
+    override fun updateParameterInfo(argumentList: KtValueArgument, context: UpdateParameterInfoContext) {
         if (context.parameterOwner !== argumentList) {
             context.removeHint()
         }
@@ -79,12 +106,18 @@ class KotlinFunctionLambdaArgumentInfoHandler : KotlinParameterInfoWithCallHandl
         val call = ktCallExpression.getCall(bindingContext) ?: return
         val resolvedCall = call.getResolvedCall(bindingContext) ?: return
         val lastParameter = resolvedCall.candidateDescriptor.valueParameters.last()
-        if(!lastParameter.type.isFunctionType) {
+        if (!lastParameter.type.isFunctionType) {
             context.removeHint()
             return
         }
-        val index = call.valueArguments.lastIndex
+        val index = lastParameter.index
         context.setCurrentParameter(index)
+    }
+
+    override fun findElementForUpdatingParameterInfo(context: UpdateParameterInfoContext): KtLambdaArgument? {
+        val element = context.file.findElementAt(context.offset) ?: return null
+        if (element is PsiWhiteSpace) return element.nextSibling as KtLambdaArgument
+        return super.findElementForUpdatingParameterInfo(context) as KtLambdaArgument
     }
 }
 

@@ -51,6 +51,7 @@ class KotlinClassTypeArgumentInfoHandler : KotlinTypeArgumentInfoHandlerBase<Cla
     override fun getArgumentListAllowedParentClasses() = setOf(KtUserType::class.java)
 }
 
+
 class KotlinFunctionTypeArgumentInfoHandler : KotlinTypeArgumentInfoHandlerBase<FunctionDescriptor>() {
     override fun fetchTypeParameters(descriptor: FunctionDescriptor) = descriptor.typeParameters
 
